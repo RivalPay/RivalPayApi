@@ -1,2 +1,0 @@
-# RivalPayApi
-Api
