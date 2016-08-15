@@ -1,49 +1,68 @@
 <?php
 
-/**
- * Значение слова-пароля выдаваемое модератором Rivalpay
- * учавствует в формировании подписи запросов
- * @var string 
- */
-define('RIVALPAY_SECRET_KEY', 'das4kh0jZVJLQFJ6ogUS8QKylVPHthwl');
-define('RIVALPAY_API_URL', 'http://api.rivalpay.com');
+// Define constant APPLICATION_ENV
+if (!defined('APPLICATION_ENV') && array_key_exists('HTTP_APPLICATION_ENV', $_SERVER)) {
+    define('APPLICATION_ENV', $_SERVER['HTTP_APPLICATION_ENV']);
+} elseif (!defined('APPLICATION_ENV') && array_key_exists('APPLICATION_ENV', $_SERVER)) {
+    define('APPLICATION_ENV', $_SERVER['APPLICATION_ENV']);
+} elseif (!defined('APPLICATION_ENV')) {
+    define('APPLICATION_ENV', 'production');
+}
 
-class RivalPayApi {
+ini_set('log_errors', 1);
+ini_set('error_log', dirname(__FILE__) . '/log/payment.log');
+
+/**
+ * Значение слова-пароля выдаваемое модератором RivalPay
+ * учавствует в формировании подписи запросов
+ * @var string
+ */
+class PaySystem {
+
+    private $_apiUrl = 'http://api.rivalpay.com/';
 
     /**
      * значение host сайта-КЛИЕНТА
      * @var string
      */
-    private $_secret_key = '';
-    private $_myHost = '';
+    private $_myHost = 'mysite.com';
+    private $_apiSekret = 'SOME_SECRET_KEY';
     private $_request = array();
 
-    public function __construct($secret_key='')
-    {
-		if($secret_key)
-			$this->_secret_key = $secret_key;
-		else
-			$this->_secret_key = RIVALPAY_SECRET_KEY;
-			
-        $this->_myHost = $_SERVER['HTTP_HOST'];
+    public function __construct($apiHost = '', $apiSekret = '', $newApiFileName = null) {
+
+        if (APPLICATION_ENV == 'development') {
+            $this->_apiUrl = 'http://net.api.rivalpay.com/';
+
+            if (!is_null($newApiFileName)) {
+                $this->_apiUrl = $this->_apiUrl . $newApiFileName;
+            }
+        }
+        if ($apiHost) {
+            $this->_myHost = $apiHost;
+        }
+        if ($apiSekret) {
+            $this->_apiSekret = $apiSekret;
+        }
+
         $this->setHTTPRequest();
     }
 
     function setHTTPRequest() {
-        if (empty($_REQUEST)) {
-            $this->_request = file_get_contents('php://input');
+        $body = file_get_contents('php://input');
 
-            if (is_object(json_decode($this->_request))) {
-                $this->_request = json_decode($this->_request, true);
-            } elseif (is_string($_REQUEST)) {
-                parse_str($_REQUEST, $this->_request);
-            }
-        } else {
-            $this->_request = $_REQUEST;
+        if (is_object(json_decode($body))) {
+            $this->_request = json_decode($body, true);
+        } elseif (is_string($body) && !empty($body)) {
+            $this->_request['ppBody'] = base64_encode($body);
+        }
+
+        if ($_REQUEST) {
+            $this->_request = array_merge($this->_request, $_REQUEST);
         }
     }
-    
-    public function getAvailablePaysystems(){
+
+    public function getAvailablePaysystems() {
         return $this->sendRequest('getAvailablePaysystems');
     }
 
@@ -59,8 +78,6 @@ class RivalPayApi {
 
         $this->_request['url'] = 'successUrl';
         $resp = $this->sendRequest('checkReturnUrl', $this->_request);
-        
-                
         if ($resp['success'] && isset($resp['data']['redirectUrl'])) {
             header('Location: ' . $resp['data']['redirectUrl']);
             exit;
@@ -81,41 +98,55 @@ class RivalPayApi {
         }
     }
 
-    public function statusUrl() {
+    public function statusUrl($ololo = array()) {
 
         error_log('============= statusUrl REQUEST START');
         error_log('RequestData => ' . print_r($this->_request, true));
         error_log('============= statusUrl REQUEST END');
 
-        return $this->sendRequest('statusUrl', $this->_request);
+        return $this->sendRequest('statusUrl', $ololo ? $ololo : $this->_request);
+    }
+
+    public function getIframeForm() {
+        error_log('============= iframeUrl REQUEST START');
+        error_log('RequestData => ' . print_r($this->_request, true));
+        error_log('============= iframeUrl REQUEST END');
+
+        $ret = '';
+        $resp = $this->sendRequest('getPayForm', $this->_request);
+        if ($resp['success'] && isset($resp['data']['payForm'])) {
+            $ret = $resp['data']['payForm'];
+        }
+        return $ret;
     }
 
     /**
-     * Отправка запроса на API Rivalpay
+     * Отправка запроса на API RivalPay
      * @param string $action - метод API который будем дергать. Пример: getPayForm
      * @param array $request - массив параметров передаваемый в метод
      * @return array - ответ от сервера
      */
     public function sendRequest($action, $request = array()) {
 
-        // подготовка данных к отправке на Rivalpay
+        // подготовка данных к отправке на RivalPay
         $request = $this->_prepareRequest($action, $request);
-
         // инициализируем сеанс
         $curl = curl_init();
         // уcтанавливаем урл, к которому обратимся
-        curl_setopt($curl, CURLOPT_URL, RIVALPAY_API_URL);
+        curl_setopt($curl, CURLOPT_URL, $this->_apiUrl);
         // максимальное время выполнения скрипта
         curl_setopt($curl, CURLOPT_TIMEOUT, 20);
         // передаем данные по методу post
         curl_setopt($curl, CURLOPT_POST, 1);
         // теперь curl вернет нам ответ, а не выведет
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+        //curl_setopt($curl, CURLOPT_NOBODY, false);
         // переменные, которые будут переданные по методу post
         curl_setopt($curl, CURLOPT_POSTFIELDS, $request);
         // отправка запроса
+
         $result = curl_exec($curl);
-        
+        //d_var($result);
         // закрываем соединение
         curl_close($curl);
 
@@ -130,7 +161,7 @@ class RivalPayApi {
 
     /**
      * Подготовка данных перед отправкой
-     * @param string $action - вызываемый метод Rivalpay
+     * @param string $action - вызываемый метод RivalPay
      * @param array $request - данные передаваемые в метод
      * @return array - массив подготовленых данных
      */
@@ -148,7 +179,7 @@ class RivalPayApi {
         $data = base64_encode($requestJson);
 
         // Генерация подписи
-        $sign = base64_encode(md5($this->_secret_key . $requestJson . $this->_secret_key));
+        $sign = base64_encode(md5($this->_apiSekret . $requestJson . $this->_apiSekret));
 
         // Возврат данных подготовленных данных
         return array(
@@ -156,30 +187,5 @@ class RivalPayApi {
             'sign' => $sign
         );
     }
-    
-    public function getIframeForm(){
-        error_log('============= iframeUrl REQUEST START');
-        error_log('RequestData => ' . print_r($this->_request, true));
-        error_log('============= iframeUrl REQUEST END');
-        
-        $ret = '';
-        $resp = $this->sendRequest('getPayForm', $this->_request);
-        if ($resp['success'] && isset($resp['data']['payForm'])) {
-            $ret = $resp['data']['payForm'];
-        }
-        return $ret;
-    }
-
-    public function sendMoney()
-    {
-        return $this->sendRequest('sendmoney', $request);
-	}
-
-    public function sendMoneyFields()
-    {
-		return $this->sendRequest('sendmoneyfields', $request);
-	}
 
 }
-
-/* End of file Someclass.php */
