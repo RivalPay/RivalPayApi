@@ -13,13 +13,13 @@ ini_set('log_errors', 1);
 ini_set('error_log', dirname(__FILE__) . '/log/payment.log');
 
 /**
- * Значение слова-пароля выдаваемое модератором RivalPay
+ * Значение слова-пароля выдаваемое модератором PeliPay
  * учавствует в формировании подписи запросов
  * @var string
  */
 class PaySystem {
 
-    private $_apiUrl = 'http://api.rivalpay.com/';
+    private $_apiUrl = 'http://api.pelipay.com/';
 
     /**
      * значение host сайта-КЛИЕНТА
@@ -32,7 +32,7 @@ class PaySystem {
     public function __construct($apiHost = '', $apiSekret = '', $newApiFileName = null) {
 
         if (APPLICATION_ENV == 'development') {
-            $this->_apiUrl = 'http://net.api.rivalpay.com/';
+            $this->_apiUrl = 'http://net.api.pelipay.com/';
 
             if (!is_null($newApiFileName)) {
                 $this->_apiUrl = $this->_apiUrl . $newApiFileName;
@@ -121,14 +121,14 @@ class PaySystem {
     }
 
     /**
-     * Отправка запроса на API RivalPay
+     * Отправка запроса на API PeliPay
      * @param string $action - метод API который будем дергать. Пример: getPayForm
      * @param array $request - массив параметров передаваемый в метод
      * @return array - ответ от сервера
      */
     public function sendRequest($action, $request = array()) {
 
-        // подготовка данных к отправке на RivalPay
+        // подготовка данных к отправке на PeliPay
         $request = $this->_prepareRequest($action, $request);
         // инициализируем сеанс
         $curl = curl_init();
@@ -161,7 +161,7 @@ class PaySystem {
 
     /**
      * Подготовка данных перед отправкой
-     * @param string $action - вызываемый метод RivalPay
+     * @param string $action - вызываемый метод PeliPay
      * @param array $request - данные передаваемые в метод
      * @return array - массив подготовленых данных
      */
