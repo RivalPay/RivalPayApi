@@ -22,9 +22,11 @@ if (isset($statusResult['success'])) {
         header("HTTP/1.0 200");
         header("Content-Type: application/xml");
         exit($statusResult['answerForPaySystem']['xml']);
+    } else {
+        exit(json_encode(array('result' => array('message' => 'OK'))));
     }
-    exit(json_encode(array('result' => array('message' => 'OK'))));
 } else {
     // Server not responding
     header($_SERVER['SERVER_PROTOCOL'] . ' 500 Internal Server Error', true, 500);
+    die;
 }
