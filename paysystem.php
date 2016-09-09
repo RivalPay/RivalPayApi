@@ -31,13 +31,10 @@ class PaySystem {
 
     public function __construct($apiHost = '', $apiSekret = '', $newApiFileName = null) {
 
-        if (APPLICATION_ENV == 'development') {
-            $this->_apiUrl = 'http://net.api.pelipay.com/';
-
-            if (!is_null($newApiFileName)) {
-                $this->_apiUrl = $this->_apiUrl . $newApiFileName;
-            }
+        if (!is_null($newApiFileName)) {
+            $this->_apiUrl = $this->_apiUrl . $newApiFileName;
         }
+
         if ($apiHost) {
             $this->_myHost = $apiHost;
         }
